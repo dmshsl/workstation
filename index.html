@@ -181,6 +181,7 @@
       </div>
       <div class="submit">
         <button type="submit" class="btn primary" id="submitBtn">사용 등록</button>
+        <button type="button" class="btn" id="queueBtn" hidden>대기 등록</button>
         <span class="note" id="submitNote"></span>
       </div>
     </form>
@@ -409,13 +410,15 @@ function render() {
   // 입력 폼 문구 (사용 중이면 이름만 받는 대기 등록으로 바뀐다)
   $('#hoursField').hidden = !!cur;
   $('#chips').hidden = !!cur;
+  $('#queueBtn').hidden = !!cur || !board.queue.length;
   if (!cur) {
-    $('#formTitle').textContent = '지금 바로 사용 등록';
-    $('#formHint').textContent = board.queue.length
-      ? `대기자 ${board.queue.length}명이 있어요. 협의된 게 아니라면 아래 대기 명단에서 시작해 주세요.`
+    const waiting = board.queue.length;
+    $('#formTitle').textContent = waiting ? '지금 쓰기 · 또는 줄 서기' : '지금 바로 사용 등록';
+    $('#formHint').textContent = waiting
+      ? `대기자 ${waiting}명이 있어요. 협의됐으면 바로 쓰고, 아니면 대기 등록으로 줄을 서세요.`
       : '이름과 사용할 시간을 적으면 지금부터 등록돼요.';
     $('#submitBtn').textContent = '사용 등록';
-    $('#submitNote').textContent = '';
+    $('#submitNote').textContent = waiting ? '대기 등록은 시간 없이 이름만 올라가요.' : '';
   } else {
     $('#formTitle').textContent = '다음 예약 (대기 등록)';
     $('#formHint').textContent = '지금은 사용 중이에요.';
@@ -487,32 +490,58 @@ function schedulePersist() {
 
 // ---------- 동작 ----------
 async function withBusy(fn) {
-  if (state.busyBtn) return; state.busyBtn = true; $('#submitBtn').disabled = true;
+  if (state.busyBtn) return; state.busyBtn = true;
+  $('#submitBtn').disabled = true; $('#queueBtn').disabled = true;
   try { await fn(); } catch (e) { console.error(e); toast('처리에 실패했어요: ' + (e && e.message ? e.message : e), 'error'); }
-  finally { state.busyBtn = false; $('#submitBtn').disabled = false; }
+  finally { state.busyBtn = false; $('#submitBtn').disabled = false; $('#queueBtn').disabled = false; }
+}
+
+// 이름칸을 읽고 비어 있으면 흔들어서 알려준다
+function readName() {
+  const el = $('#name'), v = el.value.trim();
+  if (!v) { el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 400); el.focus(); toast('이름을 입력해 주세요'); return null; }
+  return v;
+}
+
+// 시간 없이 이름만 대기 명단에 올린다 (사용 중일 때 / 비었는데 줄 설 때 공용)
+async function joinQueue(name) {
+  const now = serverNow(), id = genId();
+  await adapter.transact(raw => {
+    const { board } = normalize(raw, now, SETTINGS.historyLimit);
+    board.queue.push({ id, name, createdAt: now });
+    return toDb(board);
+  });
+  state.myName = name; $('#name').value = '';
+  toast(`${name}님을 대기 명단에 올렸어요. 비면 직접 시작해 주세요`);
 }
 
 $('#form').addEventListener('submit', e => {
   e.preventDefault();
   const nameEl = $('#name'), hoursEl = $('#hours');
-  const name = nameEl.value.trim(); const hours = Math.round(parseFloat(hoursEl.value) * 100) / 100;
+  const name = readName(); if (!name) return;
   const isFree = !normalize(state.raw, serverNow()).board.current;
-  if (!name) { nameEl.classList.add('shake'); setTimeout(() => nameEl.classList.remove('shake'), 400); nameEl.focus(); return toast('이름을 입력해 주세요'); }
-  if (isFree && !(hours >= SETTINGS.minHours && hours <= SETTINGS.maxHours)) { hoursEl.classList.add('shake'); setTimeout(() => hoursEl.classList.remove('shake'), 400); hoursEl.focus(); return toast(`사용 시간은 ${SETTINGS.minHours}~${SETTINGS.maxHours}시간 사이로 적어 주세요`); }
+  if (!isFree) { withBusy(() => joinQueue(name)); return; }
+
+  const hours = Math.round(parseFloat(hoursEl.value) * 100) / 100;
+  if (!(hours >= SETTINGS.minHours && hours <= SETTINGS.maxHours)) { hoursEl.classList.add('shake'); setTimeout(() => hoursEl.classList.remove('shake'), 400); hoursEl.focus(); return toast(`사용 시간은 ${SETTINGS.minHours}~${SETTINGS.maxHours}시간 사이로 적어 주세요`); }
   withBusy(async () => {
     const now = serverNow(), id = genId();
     const res = await adapter.transact(raw => {
       const { board } = normalize(raw, now, SETTINGS.historyLimit);
-      if (!board.current && isFree) board.current = { id, name, start: now, end: now + hours * HOUR };
+      if (!board.current) board.current = { id, name, start: now, end: now + hours * HOUR };
       else board.queue.push({ id, name, createdAt: now });
       return toDb(board);
     });
     const v = res.value || {};
     state.myName = name; nameEl.value = '';
     if (v.current && v.current.id === id) toast(`${name}님, 지금부터 ${fmtHours(hours)} 사용 등록됐어요 (종료 예정 ${fmtClock(now + hours * HOUR)})`);
-    else if (isFree) toast(`방금 다른 사람이 먼저 등록해서 ${name}님은 대기 명단에 넣었어요`);
-    else toast(`${name}님을 대기 명단에 올렸어요. 비면 직접 시작해 주세요`);
+    else toast(`방금 다른 사람이 먼저 등록해서 ${name}님은 대기 명단에 넣었어요`);
   });
+});
+
+$('#queueBtn').addEventListener('click', () => {
+  const name = readName(); if (!name) return;
+  withBusy(() => joinQueue(name));
 });
 
 $('#chips').addEventListener('click', e => {
