@@ -116,6 +116,10 @@
 
   footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; font-size: 13px; color: var(--muted); }
   footer .note { flex: 1 1 100%; font-size: 12.5px; }
+  footer .footactions { display: flex; flex-wrap: wrap; gap: 6px; }
+  footer .mailrow { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; }
+  footer .mailrow[hidden] { display: none; }
+  footer .mailrow input[type=email] { flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 8px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); outline: none; }
 
   #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: #1f2937; color: #fff; padding: 11px 16px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: .25s; max-width: min(92vw, 520px); text-align: center; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); z-index: 10; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -187,8 +191,15 @@
   </section>
 
   <footer>
-    <button class="btn sm" id="notifyBtn" type="button">비면 알림 받기</button>
+    <div class="footactions">
+      <button class="btn sm" id="mailBtn" type="button">비면 메일 받기</button>
+      <button class="btn sm" id="notifyBtn" type="button">브라우저 알림</button>
+    </div>
     <span id="sync"></span>
+    <form class="mailrow" id="mailForm" novalidate autocomplete="off" hidden>
+      <input type="email" id="mailInput" maxlength="100" placeholder="메일 주소 (비면 한 번만 보내드려요)" required>
+      <button type="submit" class="btn sm" id="mailSubmit">등록</button>
+    </form>
   </footer>
 </div>
 <div id="toast" role="status"></div>
@@ -291,18 +302,20 @@ function memoryAdapter() {
       return { committed: true, value: structuredClone(data) };
     },
     onConnection(cb) { cb(true); },
+    async addSubscriber() { /* 데모 모드에서는 저장하지 않음 */ },
   };
 }
 async function firebaseAdapter(config) {
   const v = SETTINGS.firebaseVersion;
   const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${v}/firebase-app.js`);
-  const { getDatabase, ref, onValue, runTransaction } = await import(`https://www.gstatic.com/firebasejs/${v}/firebase-database.js`);
+  const { getDatabase, ref, onValue, runTransaction, push, set } = await import(`https://www.gstatic.com/firebasejs/${v}/firebase-database.js`);
   const db = getDatabase(initializeApp(config));
   const boardRef = ref(db, 'board');
   const a = {
     kind: 'firebase', serverOffset: 0,
     subscribe(cb, onErr) { return onValue(boardRef, s => cb(s.val()), e => onErr && onErr(e)); },
     async transact(fn) { const r = await runTransaction(boardRef, fn); return { committed: r.committed, value: r.snapshot.val() }; },
+    async addSubscriber(email) { await set(push(ref(db, 'subscribers')), { email, createdAt: Date.now() }); },
     onConnection(cb) { onValue(ref(db, '.info/connected'), s => cb(!!s.val())); },
   };
   onValue(ref(db, '.info/serverTimeOffset'), s => { a.serverOffset = s.val() || 0; });
@@ -540,11 +553,42 @@ $('#queue').addEventListener('click', e => {
 
 $('#notifyBtn').addEventListener('click', async () => {
   if (!('Notification' in window)) return toast('이 브라우저는 알림을 지원하지 않아요');
-  if (state.notif) { state.notif = false; $('#notifyBtn').classList.remove('on'); $('#notifyBtn').textContent = '비면 알림 받기'; return; }
+  if (state.notif) { state.notif = false; $('#notifyBtn').classList.remove('on'); $('#notifyBtn').textContent = '브라우저 알림'; return; }
   const p = await Notification.requestPermission();
   if (p !== 'granted') return toast('브라우저 알림이 차단되어 있어요. 주소창 옆 설정에서 허용해 주세요', 'error');
   state.notif = true; $('#notifyBtn').classList.add('on'); $('#notifyBtn').textContent = '알림 켜짐';
   toast('이 탭이 열려 있는 동안 워크스테이션이 비면 알려드릴게요');
+});
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+$('#mailBtn').addEventListener('click', () => {
+  const f = $('#mailForm');
+  f.hidden = !f.hidden;
+  if (!f.hidden) $('#mailInput').focus();
+});
+$('#mailForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const input = $('#mailInput');
+  const email = input.value.trim();
+  if (!EMAIL_RE.test(email) || email.length > 100) {
+    input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
+    return toast('메일 주소를 다시 확인해 주세요', 'error');
+  }
+  const btn = $('#mailSubmit');
+  btn.disabled = true;
+  try {
+    await adapter.addSubscriber(email);
+    input.value = '';
+    $('#mailForm').hidden = true;
+    $('#mailBtn').classList.add('on');
+    $('#mailBtn').textContent = '메일 등록됨';
+    toast(state.mode === 'demo' ? '데모 모드라 실제로 등록되지는 않아요' : '워크스테이션이 비면 메일로 한 번 알려드릴게요');
+  } catch (err) {
+    console.error(err);
+    toast('등록에 실패했어요. 잠시 후 다시 시도해 주세요', 'error');
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---------- 시작 ----------
