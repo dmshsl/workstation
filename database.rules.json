@@ -1,0 +1,26 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "board": {
+      ".read": true,
+      ".write": true,
+      "current": {
+        ".validate": "newData.hasChildren(['name', 'start', 'end']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 30 && newData.child('start').isNumber() && newData.child('end').isNumber()"
+      },
+      "queue": {
+        "$id": {
+          ".validate": "newData.hasChildren(['name', 'hours']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 30 && newData.child('hours').isNumber() && newData.child('hours').val() > 0 && newData.child('hours').val() <= 168"
+        }
+      },
+      "history": {
+        "$id": {
+          ".validate": "newData.hasChildren(['name', 'start', 'end']) && newData.child('name').isString() && newData.child('start').isNumber() && newData.child('end').isNumber()"
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
+    }
+  }
+}

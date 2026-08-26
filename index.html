@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>극한환경로봇연구팀 워크스테이션 사용 현황</title>
+<meta name="description" content="극한환경로봇연구팀 워크스테이션(GPU) 사용 등록 · 남은 시간 · 대기 예약을 팀원끼리 공유하는 페이지">
+<link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236b7280'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root {
+    --bg: #f3f5f8; --card: #ffffff; --text: #171c26; --muted: #66707f; --line: #e3e7ee;
+    --accent: #2563eb; --accent-ink: #ffffff; --accent-soft: #e8efff;
+    --free: #15803d; --free-bg: #dcfce7; --busy: #b45309; --busy-bg: #fef3c7;
+    --danger: #b91c1c; --danger-bg: #fee2e2; --warn-bg: #fff7ed; --warn-line: #fdba74;
+    --radius: 18px; --shadow: 0 1px 2px rgba(15,23,42,.05), 0 10px 30px -18px rgba(15,23,42,.25);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1117; --card: #161b24; --text: #e9edf3; --muted: #97a1b2; --line: #273041;
+      --accent: #3b82f6; --accent-soft: #1b2a4a;
+      --free: #4ade80; --free-bg: rgba(20,83,45,.45); --busy: #fbbf24; --busy-bg: rgba(120,53,15,.45);
+      --danger: #f87171; --danger-bg: rgba(127,29,29,.45); --warn-bg: rgba(124,45,18,.35); --warn-line: #9a3412;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 28px 18px 48px; }
+  header.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .eyebrow { font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: .02em; }
+  h1 { font-size: 24px; margin: 2px 0 4px; font-weight: 800; letter-spacing: -.01em; }
+  .sub { margin: 0; color: var(--muted); font-size: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--card); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; margin-top: 4px; }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.on .dot { background: var(--free); box-shadow: 0 0 0 3px var(--free-bg); }
+  .pill.off .dot { background: var(--danger); }
+  .pill.demo .dot { background: var(--busy); }
+
+  .banner { border: 1px solid var(--warn-line); background: var(--warn-bg); border-radius: 14px; padding: 12px 14px; font-size: 14px; margin-bottom: 14px; }
+  .banner strong { display: block; margin-bottom: 2px; }
+  .banner ol { margin: 6px 0 0; padding-left: 20px; }
+  .banner code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 5px; }
+  .banner.error { border-color: var(--danger); background: var(--danger-bg); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 15px; font-weight: 700; }
+  .card .hint { margin: -4px 0 12px; font-size: 13px; color: var(--muted); }
+
+  .status .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+  .badge.free { background: var(--free-bg); color: var(--free); }
+  .badge.busy { background: var(--busy-bg); color: var(--busy); }
+  .since { font-size: 13px; color: var(--muted); }
+  .who { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.02em; line-height: 1.25; word-break: keep-all; }
+  .who small { font-size: 18px; font-weight: 600; color: var(--muted); margin-left: 6px; }
+  .remain { margin-top: 6px; font-size: 18px; color: var(--muted); }
+  .remain strong { font-size: 30px; font-weight: 800; color: var(--text); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .remain.urgent strong { color: var(--danger); }
+  .bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 12px 0 8px; }
+  .bar i { display: block; height: 100%; background: var(--busy); border-radius: 999px; transition: width .6s linear; }
+  .bar.urgent i { background: var(--danger); }
+  .meta { font-size: 14px; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+  .actions .lbl { font-size: 13px; color: var(--muted); margin-left: 6px; }
+  .confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; padding: 12px; border-radius: 12px; background: var(--danger-bg); font-size: 14px; }
+  .confirm span { flex: 1 1 200px; }
+
+  .btn { appearance: none; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; padding: 9px 14px; border-radius: 11px; cursor: pointer; transition: transform .05s, background .15s, border-color .15s; }
+  .btn:hover { border-color: var(--muted); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); padding: 12px 18px; font-size: 15px; }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+  .btn.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.sm { padding: 5px 10px; font-size: 13px; border-radius: 9px; }
+  .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  form .row { display: grid; grid-template-columns: 1fr 140px; gap: 10px; }
+  label.field { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .field .box { position: relative; margin-top: 5px; }
+  input[type=text], input[type=number] { width: 100%; font: inherit; font-size: 16px; padding: 12px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); outline: none; }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--card); }
+  input.shake { animation: shake .3s; border-color: var(--danger); }
+  @keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-4px) } 75% { transform: translateX(4px) } }
+  .unit { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--muted); pointer-events: none; }
+  input[type=number] { padding-right: 44px; -moz-appearance: textfield; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { font: inherit; font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; }
+  .chip:hover, .chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .submit { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .submit .note { font-size: 13px; color: var(--muted); }
+
+  ul.list { list-style: none; margin: 0; padding: 0; }
+  ul.list li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14.5px; }
+  ul.list li:first-child { border-top: 0; padding-top: 2px; }
+  .num { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .grow { flex: 1; min-width: 0; }
+  .grow .n { font-weight: 700; }
+  .grow .d { color: var(--muted); font-size: 13px; }
+  .tag { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--muted); white-space: nowrap; }
+  .tag.released { background: var(--free-bg); color: var(--free); }
+  .empty { color: var(--muted); font-size: 14px; padding: 4px 0; }
+  details summary { cursor: pointer; font-size: 15px; font-weight: 700; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary .cnt { font-size: 13px; color: var(--muted); font-weight: 500; }
+  details[open] summary { margin-bottom: 10px; }
+
+  footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+  footer .note { flex: 1 1 100%; font-size: 12.5px; }
+
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: #1f2937; color: #fff; padding: 11px 16px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: .25s; max-width: min(92vw, 520px); text-align: center; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); z-index: 10; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { background: var(--danger); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  @media (max-width: 480px) {
+    .wrap { padding: 20px 14px 40px; }
+    h1 { font-size: 21px; }
+    .who { font-size: 24px; }
+    .remain strong { font-size: 26px; }
+    form .row { grid-template-columns: 1fr 120px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">극한환경로봇연구팀</div>
+      <h1>워크스테이션 사용 현황</h1>
+      <p class="sub">링크를 아는 팀원 누구나 현재 상태를 보고 바로 등록할 수 있어요.</p>
+    </div>
+    <div id="conn" class="pill"><span class="dot"></span><span class="t">연결 중…</span></div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="status" class="card status" aria-live="polite">
+    <div class="empty">불러오는 중…</div>
+  </section>
+
+  <section class="card">
+    <h3 id="formTitle">지금 바로 사용 등록</h3>
+    <p class="hint" id="formHint">이름과 사용할 시간을 적으면 지금부터 등록돼요.</p>
+    <form id="form" novalidate autocomplete="off">
+      <div class="row">
+        <label class="field">이름
+          <div class="box"><input type="text" id="name" maxlength="20" placeholder="예: 홍길동" required></div>
+        </label>
+        <label class="field">사용 시간
+          <div class="box"><input type="number" id="hours" inputmode="decimal" min="0.5" max="48" step="0.5" value="2" required><span class="unit">시간</span></div>
+        </label>
+      </div>
+      <div class="chips" id="chips">
+        <button type="button" class="chip" data-h="1">1시간</button>
+        <button type="button" class="chip" data-h="2">2시간</button>
+        <button type="button" class="chip" data-h="4">4시간</button>
+        <button type="button" class="chip" data-h="8">8시간</button>
+        <button type="button" class="chip" data-h="12">12시간</button>
+        <button type="button" class="chip" data-h="24">24시간</button>
+      </div>
+      <div class="submit">
+        <button type="submit" class="btn primary" id="submitBtn">사용 등록</button>
+        <span class="note" id="submitNote"></span>
+      </div>
+    </form>
+  </section>
+
+  <section id="queueCard" class="card" hidden>
+    <h3 id="queueTitle">대기 중</h3>
+    <p class="hint">앞 사람의 사용이 끝나면 순서대로 자동 시작돼요.</p>
+    <ul class="list" id="queue"></ul>
+  </section>
+
+  <section class="card">
+    <details id="historyBox">
+      <summary>최근 사용 기록 <span class="cnt" id="historyCnt"></span></summary>
+      <ul class="list" id="history"></ul>
+    </details>
+  </section>
+
+  <footer>
+    <button class="btn sm" id="notifyBtn" type="button">비면 알림 받기</button>
+    <span id="sync"></span>
+    <span class="note">시간은 서버 기준으로 자동 계산되고, 화면은 새로고침 없이 실시간으로 바뀌어요. 시간이 끝나면 자동으로 해제됩니다.</span>
+  </footer>
+</div>
+<div id="toast" role="status"></div>
+
+<script type="module">
+// ============================================================
+//  ▼▼▼ 1) Firebase 설정: 이 블록 전체를 Firebase 콘솔에서 복사한
+//         "const firebaseConfig = { ... };" 로 바꿔 주세요.
+//         (README.md 의 4번 단계 참고)
+// ============================================================
+const firebaseConfig = {
+  apiKey: "여기에_붙여넣기",
+  authDomain: "여기에_붙여넣기",
+  databaseURL: "여기에_붙여넣기",
+  projectId: "여기에_붙여넣기",
+  storageBucket: "여기에_붙여넣기",
+  messagingSenderId: "여기에_붙여넣기",
+  appId: "여기에_붙여넣기"
+};
+// ============================================================
+//  ▲▲▲ 여기까지 교체
+// ============================================================
+
+// 2) 필요하면 바꿔 쓰는 값들
+const SETTINGS = {
+  minHours: 0.5,       // 최소 사용 시간
+  maxHours: 48,        // 최대 사용 시간 (연장 포함 상한)
+  historyLimit: 20,    // 최근 기록 보관 개수
+  firebaseVersion: "12.18.0",
+};
+
+// @logic-start  (순수 로직: 테스트에서 그대로 가져다 씀)
+const HOUR = 3600000, MIN = 60000;
+const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function toList(v) { if (!v) return []; return (Array.isArray(v) ? v : Object.values(v)).filter(Boolean); }
+function validCurrent(c) { return !!(c && typeof c === 'object' && c.name && typeof c.start === 'number' && typeof c.end === 'number'); }
+
+// 저장된 보드(raw)를 '지금(now)' 기준으로 정리한다.
+//  - 시간이 끝난 사용은 기록으로 옮기고, 대기 1순위를 이전 종료 시각부터 시작시킨다.
+//  - changed: DB에 반영해야 할 변화가 있었는지
+function normalize(raw, now, limit = 20) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const b = {
+    current: validCurrent(r.current) ? { ...r.current } : null,
+    queue: toList(r.queue).filter(q => q && q.name && typeof q.hours === 'number' && q.hours > 0)
+      .sort((a, c) => (a.createdAt || 0) - (c.createdAt || 0) || String(a.id).localeCompare(String(c.id))),
+    history: toList(r.history).filter(h => h && h.name && typeof h.end === 'number'),
+  };
+  let changed = r.current && !b.current ? true : false;
+  let guard = 0;
+  while (b.current && b.current.end <= now && guard++ < 200) {
+    b.history.push({ id: b.current.id || genId(), name: b.current.name, start: b.current.start, end: b.current.end, endedBy: b.current.endedBy || 'expired' });
+    const prevEnd = b.current.end;
+    b.current = null;
+    changed = true;
+    if (b.queue.length) {
+      const next = b.queue.shift();
+      b.current = { id: next.id || genId(), name: next.name, start: prevEnd, end: prevEnd + next.hours * HOUR };
+    }
+  }
+  b.history.sort((a, c) => a.end - c.end || String(a.id).localeCompare(String(c.id)));
+  if (b.history.length > limit) { b.history = b.history.slice(-limit); changed = true; }
+  return { board: b, changed };
+}
+
+// 정리된 보드를 DB에 저장하는 모양(객체 키 = id)으로 바꾼다.
+function toDb(b) {
+  const queue = {}, history = {};
+  b.queue.forEach(q => { queue[q.id] = q; });
+  b.history.forEach(h => { history[h.id] = h; });
+  return { current: b.current || null, queue, history };
+}
+
+// 대기열 각 항목의 예상 시작/종료 시각
+function schedule(board) {
+  let t = board.current ? board.current.end : null;
+  return board.queue.map(q => { const s = t, e = t == null ? null : t + q.hours * HOUR; t = e; return { ...q, expStart: s, expEnd: e }; });
+}
+// @logic-end
+
+// ---------- 저장소 어댑터 ----------
+function prune(v) {           // Firebase 처럼 null / 빈 객체는 지운다
+  if (v === null || v === undefined) return null;
+  if (Array.isArray(v)) v = Object.assign({}, v);
+  if (typeof v !== 'object') return v;
+  const o = {};
+  for (const [k, x] of Object.entries(v)) { const p = prune(x); if (p !== null) o[k] = p; }
+  return Object.keys(o).length ? o : null;
+}
+function memoryAdapter() {
+  let data = null; const subs = new Set();
+  const emit = () => subs.forEach(cb => cb(structuredClone(data)));
+  return {
+    kind: 'demo', serverOffset: 0,
+    subscribe(cb) { subs.add(cb); queueMicrotask(() => cb(structuredClone(data))); return () => subs.delete(cb); },
+    async transact(fn) {
+      const next = fn(structuredClone(data));
+      if (next === undefined) return { committed: false, value: structuredClone(data) };
+      data = prune(structuredClone(next)); emit();
+      return { committed: true, value: structuredClone(data) };
+    },
+    onConnection(cb) { cb(true); },
+  };
+}
+async function firebaseAdapter(config) {
+  const v = SETTINGS.firebaseVersion;
+  const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${v}/firebase-app.js`);
+  const { getDatabase, ref, onValue, runTransaction } = await import(`https://www.gstatic.com/firebasejs/${v}/firebase-database.js`);
+  const db = getDatabase(initializeApp(config));
+  const boardRef = ref(db, 'board');
+  const a = {
+    kind: 'firebase', serverOffset: 0,
+    subscribe(cb, onErr) { return onValue(boardRef, s => cb(s.val()), e => onErr && onErr(e)); },
+    async transact(fn) { const r = await runTransaction(boardRef, fn); return { committed: r.committed, value: r.snapshot.val() }; },
+    onConnection(cb) { onValue(ref(db, '.info/connected'), s => cb(!!s.val())); },
+  };
+  onValue(ref(db, '.info/serverTimeOffset'), s => { a.serverOffset = s.val() || 0; });
+  return a;
+}
+
+// ---------- 상태 & 유틸 ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const state = { raw: null, loaded: false, mode: 'demo', lastSync: null, myName: '', wasBusy: null, notif: false, warnedId: null, confirmRelease: false, lastKey: '', busyBtn: false };
+let adapter = null, persistTimer = null;
+const serverNow = () => Date.now() + (adapter ? adapter.serverOffset : 0);
+
+function fmtClock(ts) {
+  const d = new Date(ts), n = new Date(serverNow());
+  const t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return d.toDateString() === n.toDateString() ? t : `${d.getMonth() + 1}/${d.getDate()} ${t}`;
+}
+function fmtDuration(ms) {
+  let m = Math.round(ms / MIN), h = Math.floor(m / 60); m -= h * 60;
+  if (h && m) return `${h}시간 ${m}분`; if (h) return `${h}시간`; return `${m}분`;
+}
+function fmtRemain(ms) {
+  if (ms <= 0) return '0초';
+  if (ms >= HOUR) { const mins = Math.ceil(ms / MIN); const h = Math.floor(mins / 60), m = mins % 60; return m ? `${h}시간 ${m}분` : `${h}시간`; }
+  const m = Math.floor(ms / MIN), s = Math.floor((ms % MIN) / 1000);
+  return m ? `${m}분 ${pad(s)}초` : `${s}초`;
+}
+function fmtHours(h) { return fmtDuration(h * HOUR); }
+let toastTimer;
+function toast(msg, type = '') {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show ' + type;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.className = ''; }, 3800);
+}
+function setFavicon(color) {
+  $('#favicon').href = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='${encodeURIComponent(color)}'/%3E%3C/svg%3E`;
+}
+function notify(title, body) {
+  try { if (state.notif && Notification.permission === 'granted') new Notification(title, { body }); } catch (e) { /* 무시 */ }
+}
+
+// ---------- 렌더링 ----------
+function render() {
+  const now = serverNow();
+  if (!state.loaded) return;
+  const { board, changed } = normalize(state.raw, now, SETTINGS.historyLimit);
+  const cur = board.current;
+  const key = JSON.stringify([cur && cur.id, cur && cur.end, board.queue.map(q => q.id + q.hours), board.history.length]);
+  const boardChanged = key !== state.lastKey;
+  if (boardChanged) { state.lastKey = key; state.confirmRelease = false; }
+
+  // 상태 카드
+  const st = $('#status');
+  if (!cur) {
+    st.innerHTML = `
+      <div class="head"><span class="badge free">사용 가능</span></div>
+      <h2 class="who">현재 사용자 없음</h2>
+      <div class="meta">지금 바로 등록하고 사용할 수 있어요.</div>`;
+    document.title = `[사용 가능] 워크스테이션 · 극한환경로봇연구팀`;
+    setFavicon('#22c55e');
+  } else {
+    const remain = cur.end - now, total = Math.max(1, cur.end - cur.start);
+    const pct = Math.min(100, Math.max(0, (now - cur.start) / total * 100));
+    const urgent = remain <= 10 * MIN;
+    const actions = state.confirmRelease
+      ? `<div class="confirm"><span><b>${esc(cur.name)}</b>님의 사용을 지금 종료할까요? 대기자가 있으면 바로 넘어가요.</span>
+           <button class="btn danger solid sm" data-act="release-yes">종료하기</button>
+           <button class="btn sm" data-act="release-no">취소</button></div>`
+      : `<div class="actions">
+           <button class="btn danger" data-act="release">사용 종료</button>
+           <span class="lbl">연장</span>
+           <button class="btn" data-act="extend" data-ms="${30 * MIN}">+30분</button>
+           <button class="btn" data-act="extend" data-ms="${HOUR}">+1시간</button>
+           <button class="btn" data-act="extend" data-ms="${2 * HOUR}">+2시간</button>
+         </div>`;
+    st.innerHTML = `
+      <div class="head"><span class="badge busy">사용 중</span><span class="since">${fmtClock(cur.start)}부터 · ${fmtDuration(total)}</span></div>
+      <h2 class="who">${esc(cur.name)}<small>사용 중</small></h2>
+      <div class="remain${urgent ? ' urgent' : ''}"><strong>${fmtRemain(remain)}</strong> 남음</div>
+      <div class="bar${urgent ? ' urgent' : ''}"><i style="width:${pct.toFixed(1)}%"></i></div>
+      <div class="meta">종료 예정 <b>${fmtClock(cur.end)}</b>${board.queue.length ? ` · 대기 ${board.queue.length}명` : ''}</div>
+      ${actions}`;
+    document.title = `[${fmtRemain(remain)} · ${cur.name}] 워크스테이션 · 극한환경로봇연구팀`;
+    setFavicon(urgent ? '#ef4444' : '#f59e0b');
+  }
+
+  // 입력 폼 문구
+  const sched = schedule(board);
+  if (!cur) {
+    $('#formTitle').textContent = '지금 바로 사용 등록';
+    $('#formHint').textContent = '이름과 사용할 시간을 적으면 지금부터 등록돼요.';
+    $('#submitBtn').textContent = '사용 등록';
+    $('#submitNote').textContent = '';
+  } else {
+    const nextStart = sched.length ? sched[sched.length - 1].expEnd : cur.end;
+    $('#formTitle').textContent = '다음 예약 (대기 등록)';
+    $('#formHint').textContent = '지금은 사용 중이에요. 대기 등록하면 앞 사람이 끝나는 순간 자동으로 시작돼요.';
+    $('#submitBtn').textContent = '대기 등록';
+    $('#submitNote').textContent = `예상 시작 ${fmtClock(nextStart)}`;
+  }
+
+  // 대기열 / 기록 (보드가 바뀔 때만)
+  if (boardChanged) {
+    const qc = $('#queueCard');
+    if (sched.length) {
+      qc.hidden = false;
+      $('#queueTitle').textContent = `대기 중 · ${sched.length}명`;
+      $('#queue').innerHTML = sched.map((q, i) => `
+        <li><span class="num">${i + 1}</span>
+          <div class="grow"><div class="n">${esc(q.name)}</div><div class="d">${fmtHours(q.hours)} · 예상 ${fmtClock(q.expStart)} ~ ${fmtClock(q.expEnd)}</div></div>
+          <button class="btn ghost sm" data-act="cancel" data-id="${esc(q.id)}">취소</button></li>`).join('');
+    } else { qc.hidden = true; $('#queue').innerHTML = ''; }
+
+    const hist = board.history.slice().reverse();
+    $('#historyCnt').textContent = hist.length ? `${hist.length}건` : '';
+    $('#history').innerHTML = hist.length ? hist.map(h => `
+      <li><div class="grow"><div class="n">${esc(h.name)}</div><div class="d">${fmtClock(h.start)} → ${fmtClock(h.end)} · ${fmtDuration(h.end - h.start)}</div></div>
+        <span class="tag ${h.endedBy === 'released' ? 'released' : ''}">${h.endedBy === 'released' ? '직접 종료' : '시간 만료'}</span></li>`).join('')
+      : '<li class="empty">아직 기록이 없어요.</li>';
+  }
+
+  // 알림 (비었을 때 / 내 시간 10분 전)
+  const busy = !!cur;
+  if (state.wasBusy === true && !busy) notify('워크스테이션이 비었어요', '지금 바로 등록할 수 있어요.');
+  if (busy && cur.name === state.myName && cur.end - now <= 10 * MIN && cur.end - now > 0 && state.warnedId !== cur.id) {
+    state.warnedId = cur.id; notify('내 사용 시간이 10분 남았어요', '더 필요하면 연장 버튼을 눌러 주세요.');
+  }
+  state.wasBusy = busy;
+
+  if (changed) schedulePersist();
+  $('#sync').textContent = state.lastSync ? `마지막 동기화 ${pad(state.lastSync.getHours())}:${pad(state.lastSync.getMinutes())}:${pad(state.lastSync.getSeconds())}` : '';
+}
+
+// 시간이 지나 바뀐 상태를 (아무 클라이언트나 하나가) DB에 반영
+let persistFailUntil = 0;
+function schedulePersist() {
+  if (persistTimer || Date.now() < persistFailUntil) return;
+  persistTimer = setTimeout(async () => {
+    persistTimer = null;
+    try {
+      await adapter.transact(raw => { const r = normalize(raw, serverNow(), SETTINGS.historyLimit); return r.changed ? toDb(r.board) : undefined; });
+    } catch (e) { console.warn('persist failed', e); persistFailUntil = Date.now() + 30000; }   // 실패하면 30초 뒤 재시도
+  }, 400 + Math.random() * 2500);
+}
+
+// ---------- 동작 ----------
+async function withBusy(fn) {
+  if (state.busyBtn) return; state.busyBtn = true; $('#submitBtn').disabled = true;
+  try { await fn(); } catch (e) { console.error(e); toast('처리에 실패했어요: ' + (e && e.message ? e.message : e), 'error'); }
+  finally { state.busyBtn = false; $('#submitBtn').disabled = false; }
+}
+
+$('#form').addEventListener('submit', e => {
+  e.preventDefault();
+  const nameEl = $('#name'), hoursEl = $('#hours');
+  const name = nameEl.value.trim(); const hours = Math.round(parseFloat(hoursEl.value) * 100) / 100;
+  if (!name) { nameEl.classList.add('shake'); setTimeout(() => nameEl.classList.remove('shake'), 400); nameEl.focus(); return toast('이름을 입력해 주세요'); }
+  if (!(hours >= SETTINGS.minHours && hours <= SETTINGS.maxHours)) { hoursEl.classList.add('shake'); setTimeout(() => hoursEl.classList.remove('shake'), 400); hoursEl.focus(); return toast(`사용 시간은 ${SETTINGS.minHours}~${SETTINGS.maxHours}시간 사이로 적어 주세요`); }
+  withBusy(async () => {
+    const now = serverNow(), id = genId();
+    const expectedFree = !normalize(state.raw, now).board.current;
+    const res = await adapter.transact(raw => {
+      const { board } = normalize(raw, now, SETTINGS.historyLimit);
+      if (!board.current) board.current = { id, name, start: now, end: now + hours * HOUR };
+      else board.queue.push({ id, name, hours, createdAt: now });
+      return toDb(board);
+    });
+    const v = res.value || {};
+    state.myName = name; nameEl.value = '';
+    if (v.current && v.current.id === id) toast(`${name}님, 지금부터 ${fmtHours(hours)} 사용 등록됐어요 (종료 예정 ${fmtClock(now + hours * HOUR)})`);
+    else if (expectedFree) toast(`방금 다른 사람이 먼저 등록해서 ${name}님은 대기 목록에 넣었어요`);
+    else toast(`${name}님을 대기 목록에 추가했어요 (${fmtHours(hours)})`);
+  });
+});
+
+$('#chips').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  $('#hours').value = b.dataset.h; syncChips();
+});
+function syncChips() { const v = parseFloat($('#hours').value); document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', parseFloat(c.dataset.h) === v)); }
+$('#hours').addEventListener('input', syncChips); syncChips();
+
+$('#status').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'release') { state.confirmRelease = true; render(); return; }
+  if (act === 'release-no') { state.confirmRelease = false; render(); return; }
+  if (act === 'release-yes') {
+    state.confirmRelease = false;
+    withBusy(async () => {
+      const now = serverNow(); let ended = null;
+      const res = await adapter.transact(raw => {
+        const { board } = normalize(raw, now, SETTINGS.historyLimit);
+        if (!board.current) return;                       // 이미 비어 있음
+        board.current.end = now; board.current.endedBy = 'released';
+        return toDb(normalize(board, now, SETTINGS.historyLimit).board);
+      });
+      if (!res.committed) return toast('이미 비어 있어요');
+      const v = res.value || {};
+      toast(v.current ? `사용을 종료했어요. 이제 ${v.current.name}님 차례예요` : '사용을 종료했어요. 이제 비어 있어요');
+    });
+    return;
+  }
+  if (act === 'extend') {
+    const ms = parseInt(b.dataset.ms, 10);
+    withBusy(async () => {
+      const now = serverNow();
+      const res = await adapter.transact(raw => {
+        const { board } = normalize(raw, now, SETTINGS.historyLimit);
+        if (!board.current) return;
+        board.current.end = Math.min(board.current.end + ms, now + SETTINGS.maxHours * HOUR);
+        return toDb(board);
+      });
+      if (!res.committed) return toast('지금은 사용 중인 사람이 없어요');
+      toast(`${fmtDuration(ms)} 연장했어요 (종료 예정 ${fmtClock(res.value.current.end)})`);
+    });
+  }
+});
+
+$('#queue').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act="cancel"]'); if (!b) return;
+  const id = b.dataset.id;
+  withBusy(async () => {
+    const now = serverNow();
+    const res = await adapter.transact(raw => {
+      const { board } = normalize(raw, now, SETTINGS.historyLimit);
+      const n = board.queue.length; board.queue = board.queue.filter(q => q.id !== id);
+      if (board.queue.length === n) return;
+      return toDb(board);
+    });
+    toast(res.committed ? '대기를 취소했어요' : '이미 시작됐거나 취소된 예약이에요');
+  });
+});
+
+$('#notifyBtn').addEventListener('click', async () => {
+  if (!('Notification' in window)) return toast('이 브라우저는 알림을 지원하지 않아요');
+  if (state.notif) { state.notif = false; $('#notifyBtn').classList.remove('on'); $('#notifyBtn').textContent = '비면 알림 받기'; return; }
+  const p = await Notification.requestPermission();
+  if (p !== 'granted') return toast('브라우저 알림이 차단되어 있어요. 주소창 옆 설정에서 허용해 주세요', 'error');
+  state.notif = true; $('#notifyBtn').classList.add('on'); $('#notifyBtn').textContent = '알림 켜짐';
+  toast('이 탭이 열려 있는 동안 워크스테이션이 비면 알려드릴게요');
+});
+
+// ---------- 시작 ----------
+function setConn(kind, text) { const c = $('#conn'); c.className = 'pill ' + kind; c.querySelector('.t').textContent = text; }
+function showBanner(html, error = false) { const b = $('#banner'); b.innerHTML = html; b.className = 'banner' + (error ? ' error' : ''); b.hidden = false; }
+
+const isPlaceholder = v => !v || /여기에|PASTE|YOUR_/i.test(String(v));
+const forceDemo = new URLSearchParams(location.search).has('demo');
+const configured = !isPlaceholder(firebaseConfig.apiKey) && !isPlaceholder(firebaseConfig.projectId);
+const hasDbUrl = !isPlaceholder(firebaseConfig.databaseURL) && /^https:\/\//.test(firebaseConfig.databaseURL || '');
+
+async function start() {
+  if (forceDemo || !configured || !hasDbUrl) {
+    state.mode = 'demo';
+    adapter = memoryAdapter();
+    window.__demo = { advance(ms) { adapter.serverOffset += ms; render(); } };
+    if (configured && !hasDbUrl) {
+      showBanner(`<strong>databaseURL 이 비어 있어요</strong> Firebase 콘솔 → Realtime Database 화면 위쪽의 주소(<code>https://…firebasedatabase.app</code>)를 복사해서 <code>firebaseConfig</code> 의 <code>databaseURL</code> 에 넣어 주세요. 그 전까지는 데모 모드로만 동작해요.`, true);
+    } else if (!forceDemo) {
+      showBanner(`<strong>데모 모드 (아직 Firebase 설정 전)</strong> 지금은 이 화면 안에서만 동작하고, 새로고침하면 초기화돼요. 다른 사람과 공유하려면 <code>README.md</code> 순서대로 Firebase 설정값을 <code>index.html</code> 에 붙여 넣어 주세요.`);
+    } else {
+      showBanner(`<strong>데모 모드</strong> 이 화면 안에서만 동작해요 (새로고침하면 초기화).`);
+    }
+    setConn('demo', '데모 모드');
+  } else {
+    state.mode = 'firebase';
+    try { adapter = await firebaseAdapter(firebaseConfig); }
+    catch (e) {
+      console.error(e);
+      showBanner(`<strong>Firebase 연결에 실패했어요</strong> 인터넷 연결과 <code>firebaseConfig</code> 값을 확인해 주세요. (${esc(e.message || e)})`, true);
+      setConn('off', '연결 실패'); return;
+    }
+    let everConnected = false;
+    adapter.onConnection(ok => {
+      if (ok) everConnected = true;
+      setConn(ok ? 'on' : (everConnected ? 'off' : ''), ok ? '실시간 연결됨' : (everConnected ? '연결 끊김 · 재연결 중' : '연결 중…'));
+    });
+  }
+  adapter.subscribe(v => { state.raw = v; state.loaded = true; state.lastSync = new Date(); render(); },
+    err => { console.error(err); showBanner(`<strong>데이터베이스 권한 오류</strong> Firebase 콘솔 → Realtime Database → <b>규칙</b> 탭에 <code>database.rules.json</code> 내용을 붙여넣고 <b>게시</b>했는지 확인해 주세요. (${esc(err.message || err)})`, true); setConn('off', '권한 오류'); });
+  setInterval(render, 1000);
+}
+start();
+</script>
+</body>
+</html>
