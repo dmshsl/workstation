@@ -10,7 +10,7 @@
       },
       "queue": {
         "$id": {
-          ".validate": "newData.hasChildren(['name', 'hours']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 30 && newData.child('hours').isNumber() && newData.child('hours').val() > 0 && newData.child('hours').val() <= 168"
+          ".validate": "newData.hasChildren(['name']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 30"
         }
       },
       "history": {

@@ -84,7 +84,16 @@
   .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
   form .row { display: grid; grid-template-columns: 1fr 140px; gap: 10px; }
+  form .row:has(#hoursField[hidden]) { grid-template-columns: 1fr; }
+  #chips[hidden] { display: none; }
+  #queue li { flex-wrap: wrap; }
+  .qstart { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 9px 0 3px; }
+  .qstart input.qh { width: 78px; font: inherit; font-size: 15px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); outline: none; -moz-appearance: textfield; }
+  .qstart input.qh::-webkit-inner-spin-button, .qstart input.qh::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .qstart .unitp { font-size: 13px; color: var(--muted); margin-right: 4px; }
+  .btn.sm.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   label.field { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+  label.field[hidden] { display: none; }
   .field .box { position: relative; margin-top: 5px; }
   input[type=text], input[type=number] { width: 100%; font: inherit; font-size: 16px; padding: 12px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); outline: none; }
   input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--card); }
@@ -158,8 +167,8 @@
         <label class="field">이름
           <div class="box"><input type="text" id="name" maxlength="20" placeholder="예: 홍길동" required></div>
         </label>
-        <label class="field">사용 시간
-          <div class="box"><input type="number" id="hours" inputmode="decimal" min="0.5" max="48" step="0.5" value="2" required><span class="unit">시간</span></div>
+        <label class="field" id="hoursField">사용 시간
+          <div class="box"><input type="number" id="hours" inputmode="decimal" min="0.5" max="48" step="0.5" value="2"><span class="unit">시간</span></div>
         </label>
       </div>
       <div class="chips" id="chips">
@@ -179,7 +188,7 @@
 
   <section id="queueCard" class="card" hidden>
     <h3 id="queueTitle">대기 중</h3>
-    <p class="hint">앞 사람의 사용이 끝나면 순서대로 자동 시작돼요.</p>
+    <p class="hint" id="queueHint"></p>
     <ul class="list" id="queue"></ul>
   </section>
 
@@ -238,27 +247,23 @@ function toList(v) { if (!v) return []; return (Array.isArray(v) ? v : Object.va
 function validCurrent(c) { return !!(c && typeof c === 'object' && c.name && typeof c.start === 'number' && typeof c.end === 'number'); }
 
 // 저장된 보드(raw)를 '지금(now)' 기준으로 정리한다.
-//  - 시간이 끝난 사용은 기록으로 옮기고, 대기 1순위를 이전 종료 시각부터 시작시킨다.
+//  - 시간이 끝난 사용은 기록으로 옮긴다.
+//  - 대기자는 자동으로 시작되지 않는다. 비어 있어도 명단에 남아 있고,
+//    본인이 직접 '사용 시작'을 눌러야 시작된다 (새벽에 타이머가 도는 것을 막기 위함).
 //  - changed: DB에 반영해야 할 변화가 있었는지
 function normalize(raw, now, limit = 20) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const b = {
     current: validCurrent(r.current) ? { ...r.current } : null,
-    queue: toList(r.queue).filter(q => q && q.name && typeof q.hours === 'number' && q.hours > 0)
+    queue: toList(r.queue).filter(q => q && q.name)
       .sort((a, c) => (a.createdAt || 0) - (c.createdAt || 0) || String(a.id).localeCompare(String(c.id))),
     history: toList(r.history).filter(h => h && h.name && typeof h.end === 'number'),
   };
   let changed = r.current && !b.current ? true : false;
-  let guard = 0;
-  while (b.current && b.current.end <= now && guard++ < 200) {
+  if (b.current && b.current.end <= now) {
     b.history.push({ id: b.current.id || genId(), name: b.current.name, start: b.current.start, end: b.current.end, endedBy: b.current.endedBy || 'expired' });
-    const prevEnd = b.current.end;
     b.current = null;
     changed = true;
-    if (b.queue.length) {
-      const next = b.queue.shift();
-      b.current = { id: next.id || genId(), name: next.name, start: prevEnd, end: prevEnd + next.hours * HOUR };
-    }
   }
   b.history.sort((a, c) => a.end - c.end || String(a.id).localeCompare(String(c.id)));
   if (b.history.length > limit) { b.history = b.history.slice(-limit); changed = true; }
@@ -273,11 +278,6 @@ function toDb(b) {
   return { current: b.current || null, queue, history };
 }
 
-// 대기열 각 항목의 예상 시작/종료 시각
-function schedule(board) {
-  let t = board.current ? board.current.end : null;
-  return board.queue.map(q => { const s = t, e = t == null ? null : t + q.hours * HOUR; t = e; return { ...q, expStart: s, expEnd: e }; });
-}
 // @logic-end
 
 // ---------- 저장소 어댑터 ----------
@@ -326,7 +326,7 @@ async function firebaseAdapter(config) {
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = n => String(n).padStart(2, '0');
-const state = { raw: null, loaded: false, mode: 'demo', lastSync: null, myName: '', wasBusy: null, notif: false, warnedId: null, confirmRelease: false, lastKey: '', busyBtn: false };
+const state = { raw: null, loaded: false, mode: 'demo', lastSync: null, myName: '', wasBusy: null, notif: false, warnedId: null, confirmRelease: false, lastKey: '', busyBtn: false, startingId: null };
 let adapter = null, persistTimer = null;
 const serverNow = () => Date.now() + (adapter ? adapter.serverOffset : 0);
 
@@ -364,17 +364,20 @@ function render() {
   if (!state.loaded) return;
   const { board, changed } = normalize(state.raw, now, SETTINGS.historyLimit);
   const cur = board.current;
-  const key = JSON.stringify([cur && cur.id, cur && cur.end, board.queue.map(q => q.id + q.hours), board.history.length]);
+  const key = JSON.stringify([cur && cur.id, cur && cur.end, board.queue.map(q => q.id), board.history.length, !cur, state.startingId]);
   const boardChanged = key !== state.lastKey;
   if (boardChanged) { state.lastKey = key; state.confirmRelease = false; }
 
   // 상태 카드
   const st = $('#status');
   if (!cur) {
+    const waiting = board.queue.length;
     st.innerHTML = `
-      <div class="head"><span class="badge free">사용 가능</span></div>
+      <div class="head"><span class="badge free">사용 가능</span>${waiting ? `<span class="since">대기자 ${waiting}명</span>` : ''}</div>
       <h2 class="who">현재 사용자 없음</h2>
-      <div class="meta">지금 바로 등록하고 사용할 수 있어요.</div>`;
+      <div class="meta">${waiting
+        ? `대기 명단에 <b>${esc(board.queue[0].name)}</b>님${waiting > 1 ? ` 외 ${waiting - 1}명` : ''}이 있어요. 아래에서 협의 후 시작해 주세요.`
+        : '지금 바로 등록하고 사용할 수 있어요.'}</div>`;
     document.title = `[사용 가능] 워크스테이션 · 극한환경로봇연구팀`;
     setFavicon('#22c55e');
   } else {
@@ -382,7 +385,7 @@ function render() {
     const pct = Math.min(100, Math.max(0, (now - cur.start) / total * 100));
     const urgent = remain <= 10 * MIN;
     const actions = state.confirmRelease
-      ? `<div class="confirm"><span><b>${esc(cur.name)}</b>님의 사용을 지금 종료할까요? 대기자가 있으면 바로 넘어가요.</span>
+      ? `<div class="confirm"><span><b>${esc(cur.name)}</b>님의 사용을 지금 종료할까요?</span>
            <button class="btn danger solid sm" data-act="release-yes">종료하기</button>
            <button class="btn sm" data-act="release-no">취소</button></div>`
       : `<div class="actions">
@@ -403,32 +406,52 @@ function render() {
     setFavicon(urgent ? '#ef4444' : '#f59e0b');
   }
 
-  // 입력 폼 문구
-  const sched = schedule(board);
+  // 입력 폼 문구 (사용 중이면 이름만 받는 대기 등록으로 바뀐다)
+  $('#hoursField').hidden = !!cur;
+  $('#chips').hidden = !!cur;
   if (!cur) {
     $('#formTitle').textContent = '지금 바로 사용 등록';
-    $('#formHint').textContent = '이름과 사용할 시간을 적으면 지금부터 등록돼요.';
+    $('#formHint').textContent = board.queue.length
+      ? `대기자 ${board.queue.length}명이 있어요. 협의된 게 아니라면 아래 대기 명단에서 시작해 주세요.`
+      : '이름과 사용할 시간을 적으면 지금부터 등록돼요.';
     $('#submitBtn').textContent = '사용 등록';
     $('#submitNote').textContent = '';
   } else {
-    const nextStart = sched.length ? sched[sched.length - 1].expEnd : cur.end;
     $('#formTitle').textContent = '다음 예약 (대기 등록)';
     $('#formHint').textContent = '지금은 사용 중이에요.';
     $('#submitBtn').textContent = '대기 등록';
-    $('#submitNote').textContent = `예상 시작 ${fmtClock(nextStart)}`;
+    $('#submitNote').textContent = '이름만 올려두면 돼요. 비면 직접 시작하세요.';
   }
 
   // 대기열 / 기록 (보드가 바뀔 때만)
   if (boardChanged) {
     const qc = $('#queueCard');
-    if (sched.length) {
+    if (board.queue.length) {
       qc.hidden = false;
-      $('#queueTitle').textContent = `대기 중 · ${sched.length}명`;
-      $('#queue').innerHTML = sched.map((q, i) => `
-        <li><span class="num">${i + 1}</span>
-          <div class="grow"><div class="n">${esc(q.name)}</div><div class="d">${fmtHours(q.hours)} · 예상 ${fmtClock(q.expStart)} ~ ${fmtClock(q.expEnd)}</div></div>
-          <button class="btn ghost sm" data-act="cancel" data-id="${esc(q.id)}">취소</button></li>`).join('');
-    } else { qc.hidden = true; $('#queue').innerHTML = ''; }
+      $('#queueTitle').textContent = `대기 중 · ${board.queue.length}명`;
+      $('#queueHint').textContent = cur
+        ? '순서는 참고용이에요. 앞사람이 끝나도 자동으로 시작되지 않으니, 비면 직접 시작하세요.'
+        : '지금 비어 있어요. 협의된 분이 시간을 정해 시작하면 됩니다.';
+      $('#queue').innerHTML = board.queue.map((q, i) => {
+        const opening = !cur && state.startingId === q.id;
+        const acts = opening
+          ? `<div class="qstart">
+               <input type="number" class="qh" id="qh-${esc(q.id)}" inputmode="decimal" min="${SETTINGS.minHours}" max="${SETTINGS.maxHours}" step="0.5" value="2" aria-label="사용 시간">
+               <span class="unitp">시간</span>
+               <button type="button" class="chip" data-act="qchip" data-id="${esc(q.id)}" data-h="1">1</button>
+               <button type="button" class="chip" data-act="qchip" data-id="${esc(q.id)}" data-h="2">2</button>
+               <button type="button" class="chip" data-act="qchip" data-id="${esc(q.id)}" data-h="4">4</button>
+               <button type="button" class="chip" data-act="qchip" data-id="${esc(q.id)}" data-h="8">8</button>
+               <button class="btn sm primary" data-act="start-go" data-id="${esc(q.id)}">시작</button>
+               <button class="btn ghost sm" data-act="start-cancel">닫기</button>
+             </div>`
+          : `${!cur ? `<button class="btn sm" data-act="start" data-id="${esc(q.id)}">사용 시작</button>` : ''}
+             <button class="btn ghost sm" data-act="cancel" data-id="${esc(q.id)}">대기 취소</button>`;
+        return `<li><span class="num">${i + 1}</span>
+          <div class="grow"><div class="n">${esc(q.name)}</div><div class="d">${q.createdAt ? `${fmtClock(q.createdAt)} 등록` : '대기 중'}</div></div>
+          ${acts}</li>`;
+      }).join('');
+    } else { qc.hidden = true; $('#queue').innerHTML = ''; state.startingId = null; }
 
     const hist = board.history.slice().reverse();
     $('#historyCnt').textContent = hist.length ? `${hist.length}건` : '';
@@ -473,22 +496,22 @@ $('#form').addEventListener('submit', e => {
   e.preventDefault();
   const nameEl = $('#name'), hoursEl = $('#hours');
   const name = nameEl.value.trim(); const hours = Math.round(parseFloat(hoursEl.value) * 100) / 100;
+  const isFree = !normalize(state.raw, serverNow()).board.current;
   if (!name) { nameEl.classList.add('shake'); setTimeout(() => nameEl.classList.remove('shake'), 400); nameEl.focus(); return toast('이름을 입력해 주세요'); }
-  if (!(hours >= SETTINGS.minHours && hours <= SETTINGS.maxHours)) { hoursEl.classList.add('shake'); setTimeout(() => hoursEl.classList.remove('shake'), 400); hoursEl.focus(); return toast(`사용 시간은 ${SETTINGS.minHours}~${SETTINGS.maxHours}시간 사이로 적어 주세요`); }
+  if (isFree && !(hours >= SETTINGS.minHours && hours <= SETTINGS.maxHours)) { hoursEl.classList.add('shake'); setTimeout(() => hoursEl.classList.remove('shake'), 400); hoursEl.focus(); return toast(`사용 시간은 ${SETTINGS.minHours}~${SETTINGS.maxHours}시간 사이로 적어 주세요`); }
   withBusy(async () => {
     const now = serverNow(), id = genId();
-    const expectedFree = !normalize(state.raw, now).board.current;
     const res = await adapter.transact(raw => {
       const { board } = normalize(raw, now, SETTINGS.historyLimit);
-      if (!board.current) board.current = { id, name, start: now, end: now + hours * HOUR };
-      else board.queue.push({ id, name, hours, createdAt: now });
+      if (!board.current && isFree) board.current = { id, name, start: now, end: now + hours * HOUR };
+      else board.queue.push({ id, name, createdAt: now });
       return toDb(board);
     });
     const v = res.value || {};
     state.myName = name; nameEl.value = '';
     if (v.current && v.current.id === id) toast(`${name}님, 지금부터 ${fmtHours(hours)} 사용 등록됐어요 (종료 예정 ${fmtClock(now + hours * HOUR)})`);
-    else if (expectedFree) toast(`방금 다른 사람이 먼저 등록해서 ${name}님은 대기 목록에 넣었어요`);
-    else toast(`${name}님을 대기 목록에 추가했어요 (${fmtHours(hours)})`);
+    else if (isFree) toast(`방금 다른 사람이 먼저 등록해서 ${name}님은 대기 명단에 넣었어요`);
+    else toast(`${name}님을 대기 명단에 올렸어요. 비면 직접 시작해 주세요`);
   });
 });
 
@@ -537,18 +560,54 @@ $('#status').addEventListener('click', e => {
 });
 
 $('#queue').addEventListener('click', e => {
-  const b = e.target.closest('button[data-act="cancel"]'); if (!b) return;
-  const id = b.dataset.id;
-  withBusy(async () => {
-    const now = serverNow();
-    const res = await adapter.transact(raw => {
-      const { board } = normalize(raw, now, SETTINGS.historyLimit);
-      const n = board.queue.length; board.queue = board.queue.filter(q => q.id !== id);
-      if (board.queue.length === n) return;
-      return toDb(board);
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id;
+
+  if (act === 'start') { state.startingId = id; render(); return; }
+  if (act === 'start-cancel') { state.startingId = null; render(); return; }
+  if (act === 'qchip') { const f = $(`#qh-${CSS.escape(id)}`); if (f) f.value = b.dataset.h; return; }
+
+  if (act === 'cancel') {
+    withBusy(async () => {
+      const res = await adapter.transact(raw => {
+        const { board } = normalize(raw, serverNow(), SETTINGS.historyLimit);
+        const n = board.queue.length; board.queue = board.queue.filter(q => q.id !== id);
+        if (board.queue.length === n) return;
+        return toDb(board);
+      });
+      if (state.startingId === id) state.startingId = null;
+      toast(res.committed ? '대기를 취소했어요' : '이미 시작됐거나 취소된 대기예요');
     });
-    toast(res.committed ? '대기를 취소했어요' : '이미 시작됐거나 취소된 예약이에요');
-  });
+    return;
+  }
+
+  if (act === 'start-go') {
+    const f = $(`#qh-${CSS.escape(id)}`);
+    const hours = Math.round(parseFloat(f && f.value) * 100) / 100;
+    if (!(hours >= SETTINGS.minHours && hours <= SETTINGS.maxHours)) {
+      if (f) { f.classList.add('shake'); setTimeout(() => f.classList.remove('shake'), 400); f.focus(); }
+      return toast(`사용 시간은 ${SETTINGS.minHours}~${SETTINGS.maxHours}시간 사이로 적어 주세요`);
+    }
+    withBusy(async () => {
+      const now = serverNow();
+      let picked = null, blocked = false;
+      const res = await adapter.transact(raw => {
+        const { board } = normalize(raw, now, SETTINGS.historyLimit);
+        if (board.current) { blocked = true; return; }
+        const q = board.queue.find(x => x.id === id);
+        if (!q) return;
+        picked = q;
+        board.queue = board.queue.filter(x => x.id !== id);
+        board.current = { id: q.id, name: q.name, start: now, end: now + hours * HOUR };
+        return toDb(board);
+      });
+      state.startingId = null;
+      if (blocked) return toast('방금 다른 사람이 먼저 시작했어요', 'error');
+      if (!res.committed || !picked) return toast('이미 시작됐거나 취소된 대기예요', 'error');
+      state.myName = picked.name;
+      toast(`${picked.name}님, 지금부터 ${fmtHours(hours)} 사용 시작됐어요 (종료 예정 ${fmtClock(now + hours * HOUR)})`);
+    });
+  }
 });
 
 $('#notifyBtn').addEventListener('click', async () => {
