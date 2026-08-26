@@ -136,7 +136,6 @@
     <div>
       <div class="eyebrow">극한환경로봇연구팀</div>
       <h1>워크스테이션 사용 현황</h1>
-      <p class="sub">링크를 아는 팀원 누구나 현재 상태를 보고 바로 등록할 수 있어요.</p>
     </div>
     <div id="conn" class="pill"><span class="dot"></span><span class="t">연결 중…</span></div>
   </header>
@@ -190,7 +189,6 @@
   <footer>
     <button class="btn sm" id="notifyBtn" type="button">비면 알림 받기</button>
     <span id="sync"></span>
-    <span class="note">시간은 서버 기준으로 자동 계산되고, 화면은 새로고침 없이 실시간으로 바뀌어요. 시간이 끝나면 자동으로 해제됩니다.</span>
   </footer>
 </div>
 <div id="toast" role="status"></div>
@@ -402,7 +400,7 @@ function render() {
   } else {
     const nextStart = sched.length ? sched[sched.length - 1].expEnd : cur.end;
     $('#formTitle').textContent = '다음 예약 (대기 등록)';
-    $('#formHint').textContent = '지금은 사용 중이에요. 대기 등록하면 앞 사람이 끝나는 순간 자동으로 시작돼요.';
+    $('#formHint').textContent = '지금은 사용 중이에요.';
     $('#submitBtn').textContent = '대기 등록';
     $('#submitNote').textContent = `예상 시작 ${fmtClock(nextStart)}`;
   }
