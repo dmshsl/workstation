@@ -22,13 +22,21 @@
         ".validate": false
       }
     },
-    "subscribers": {
-      "$id": {
-        ".write": "!data.exists() && newData.exists()",
-        ".validate": "newData.hasChildren(['email', 'createdAt']) && newData.child('email').isString() && newData.child('email').val().length >= 5 && newData.child('email').val().length <= 100 && newData.child('email').val().matches(/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/) && newData.child('createdAt').isNumber()",
+    "emails": {
+      "$key": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['name', 'email', 'updatedAt']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 30 && newData.child('email').isString() && newData.child('email').val().length >= 5 && newData.child('email').val().length <= 100 && newData.child('email').val().matches(/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/) && newData.child('updatedAt').isNumber()",
+        "name": { ".validate": true },
         "email": { ".validate": true },
-        "createdAt": { ".validate": true },
+        "updatedAt": { ".validate": true },
         "$rest": { ".validate": false }
+      }
+    },
+    "emailNames": {
+      ".read": true,
+      "$key": {
+        ".write": true,
+        ".validate": "newData.isBoolean() && newData.val() == true"
       }
     }
   }
